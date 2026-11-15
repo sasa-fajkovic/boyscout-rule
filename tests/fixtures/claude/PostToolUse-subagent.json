@@ -1,0 +1,27 @@
+{
+  "session_id": "df9bf3d4-0515-4a01-a340-7ab5a56556b7",
+  "transcript_path": "/tmp/transcript.jsonl",
+  "cwd": "/tmp/repo",
+  "prompt_id": "29c73682-99ec-435e-8e2f-23c407fd2958",
+  "permission_mode": "auto",
+  "agent_id": "acf2b184c20c244a7",
+  "agent_type": "general-purpose",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "echo from-sub",
+    "description": "Print from-sub string"
+  },
+  "tool_response": {
+    "stdout": "from-sub",
+    "stderr": "",
+    "interrupted": false,
+    "isImage": false,
+    "noOutputExpected": false
+  },
+  "tool_use_id": "toolu_01XpwGyCCbquEWrQ8gQqoJZQ",
+  "duration_ms": 160
+}

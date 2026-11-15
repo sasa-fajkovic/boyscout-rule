@@ -1,0 +1,30 @@
+{
+  "tool": "shell",
+  "sessionID": "test-session",
+  "agent": "build",
+  "messageID": "test-message",
+  "id": "call-success",
+  "input": {
+    "command": "node -e \"console.log(42)\""
+  },
+  "status": "completed",
+  "result": {
+    "output": {
+      "exit": 0,
+      "truncated": false,
+      "output": "42\n",
+      "status": "completed"
+    },
+    "content": [
+      {
+        "type": "text",
+        "text": "42\n"
+      }
+    ],
+    "metadata": {
+      "status": "completed",
+      "truncated": false,
+      "exit": 0
+    }
+  }
+}

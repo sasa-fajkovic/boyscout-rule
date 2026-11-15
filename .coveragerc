@@ -1,0 +1,8 @@
+[run]
+branch = True
+include = */hooks/boyscout.py,*/.github/scripts/*.py
+parallel = True
+
+[report]
+show_missing = True
+fail_under = 90

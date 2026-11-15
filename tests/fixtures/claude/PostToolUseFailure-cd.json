@@ -1,0 +1,20 @@
+{
+  "session_id": "85fecc37-880c-4a41-99b7-5f11d2f99e2b",
+  "transcript_path": "/home/user/.claude/projects/-tmp-repo/session.jsonl",
+  "cwd": "/tmp/repo",
+  "prompt_id": "9cea7be0-8ada-4dac-98b6-93e27f5107e5",
+  "permission_mode": "auto",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUseFailure",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "cd /missing && npm run tests",
+    "description": "Run npm tests script in nonexistent directory"
+  },
+  "tool_use_id": "toolu_01FbRFHzAkrrezAgQVpqazuK",
+  "error": "Exit code 1\n(eval):cd:1: no such file or directory: /missing",
+  "is_interrupt": false,
+  "duration_ms": 164
+}

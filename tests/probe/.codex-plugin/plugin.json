@@ -1,0 +1,6 @@
+{
+  "name": "boyscout-probe",
+  "version": "0.0.0",
+  "description": "Test-only probe that logs hook inputs.",
+  "hooks": "./hooks/codex-hooks.json"
+}

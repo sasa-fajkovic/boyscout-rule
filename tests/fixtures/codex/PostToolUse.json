@@ -1,0 +1,15 @@
+{
+  "session_id": "01a18863-3935-7760-b676-57e4240be85a",
+  "turn_id": "01a18863-3b5f-7b23-ab48-362b55421567",
+  "transcript_path": "/tmp/transcript.jsonl",
+  "cwd": "/tmp/repo",
+  "hook_event_name": "PostToolUse",
+  "model": "gpt-6.1-sol",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "ls /nonexistent-dir"
+  },
+  "tool_response": "ls: /nonexistent-dir: No such file or directory\n",
+  "tool_use_id": "exec-5341a517-7698-4d89-a4a7-2386cf7f3848"
+}

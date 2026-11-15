@@ -1,0 +1,23 @@
+{
+  "name": "boyscout-rule",
+  "version": "0.5.0",
+  "description": "Leave the repository better than you found it: agents publish verified lessons, small fixes and repo skills as small draft PRs instead of saving them to memory.",
+  "author": {
+    "name": "Sasa Fajkovic"
+  },
+  "repository": "https://github.com/sasa-fajkovic/boyscout-rule",
+  "license": "MIT",
+  "keywords": [
+    "boy-scout-rule",
+    "memory",
+    "pull-requests",
+    "skills",
+    "hooks"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/codex.json",
+  "interface": {
+    "displayName": "Boy Scout Rule",
+    "shortDescription": "Turn lessons into small draft PRs"
+  }
+}

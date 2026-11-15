@@ -1,0 +1,11 @@
+{
+  "session_id": "01a18862-3139-7142-8e04-019d0440bcbe",
+  "turn_id": "01a18862-3356-7c51-a8d4-15efa311f053",
+  "transcript_path": null,
+  "cwd": "/tmp/repo",
+  "hook_event_name": "Stop",
+  "model": "gpt-6.1-sol",
+  "permission_mode": "bypassPermissions",
+  "stop_hook_active": false,
+  "last_assistant_message": "PROBE-SS-4417\nPROBE-UPS-9023\nPROBE-PTU-3361"
+}

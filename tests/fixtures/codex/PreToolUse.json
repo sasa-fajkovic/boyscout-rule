@@ -1,0 +1,14 @@
+{
+  "session_id": "01a18862-3139-7142-8e04-019d0440bcbe",
+  "turn_id": "01a18862-3356-7c51-a8d4-15efa311f053",
+  "transcript_path": null,
+  "cwd": "/tmp/repo",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-6.1-sol",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "echo hello"
+  },
+  "tool_use_id": "exec-1de5d82b-f4a6-4019-b49b-bd316a7b3f1a"
+}

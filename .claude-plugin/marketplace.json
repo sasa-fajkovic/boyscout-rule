@@ -1,0 +1,14 @@
+{
+  "name": "boyscout-rule",
+  "description": "The boyscout-rule plugin for Claude Code and Codex.",
+  "owner": {
+    "name": "Sasa Fajkovic"
+  },
+  "plugins": [
+    {
+      "name": "boyscout-rule",
+      "source": "./",
+      "description": "Agents publish verified lessons, small fixes and repo skills as small draft PRs instead of saving them to memory."
+    }
+  ]
+}

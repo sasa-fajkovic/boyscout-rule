@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.env
+.env.*
+tests/out/
+node_modules/
+dist/
+.artifacts/
+
+.coverage*
+!.coveragerc
+.ruff_cache/

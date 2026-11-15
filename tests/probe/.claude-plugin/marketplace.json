@@ -1,0 +1,5 @@
+{
+  "name": "boyscout-probe-market",
+  "owner": {"name": "boyscout-rule tests"},
+  "plugins": [{"name": "boyscout-probe", "source": "./", "description": "Test-only probe."}]
+}

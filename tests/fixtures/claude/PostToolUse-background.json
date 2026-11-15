@@ -1,0 +1,27 @@
+{
+  "session_id": "0649fc65-4891-47ce-91eb-c190065f77b6",
+  "transcript_path": "/home/user/.claude/projects/-tmp-repo/session.jsonl",
+  "cwd": "/tmp/repo",
+  "prompt_id": "23e7d316-bba9-4a89-8a70-22d70e36d182",
+  "permission_mode": "auto",
+  "effort": {
+    "level": "medium"
+  },
+  "hook_event_name": "PostToolUse",
+  "tool_name": "Bash",
+  "tool_input": {
+    "command": "sleep 2; echo done",
+    "description": "Run sleep 2 then echo done in background",
+    "run_in_background": true
+  },
+  "tool_response": {
+    "stdout": "",
+    "stderr": "",
+    "interrupted": false,
+    "isImage": false,
+    "noOutputExpected": false,
+    "backgroundTaskId": "biwdm5oso"
+  },
+  "tool_use_id": "toolu_01J2hwJTBiRxCnEbAAzni9FE",
+  "duration_ms": 182
+}

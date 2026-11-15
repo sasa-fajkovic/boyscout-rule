@@ -1,0 +1,9 @@
+{
+  "session_id": "41aa3add-8a17-4b3e-b7a0-686a910ff409",
+  "transcript_path": "/tmp/transcript.jsonl",
+  "cwd": "/tmp/repo",
+  "prompt_id": "18bd7bca-2825-4527-bd32-4a110570757b",
+  "permission_mode": "auto",
+  "hook_event_name": "UserPromptSubmit",
+  "prompt": "Run these two bash commands one at a time: `echo hello`, then `false`. Then reply with every string that begins with PROBE- that appears anywhere in your context, one per line, nothing else."
+}

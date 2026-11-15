@@ -1,0 +1,10 @@
+{
+  "hooks": {
+    "SessionStart": [{"hooks": [{"type": "command", "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/hooks/probe.py\" SessionStart claude"}]}],
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/hooks/probe.py\" UserPromptSubmit claude"}]}],
+    "PostToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/hooks/probe.py\" PostToolUse claude"}]}],
+    "PostToolUseFailure": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/hooks/probe.py\" PostToolUseFailure claude"}]}],
+    "SubagentStart": [{"hooks": [{"type": "command", "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/hooks/probe.py\" SubagentStart claude"}]}],
+    "SessionEnd": [{"hooks": [{"type": "command", "command": "python3 -I \"${CLAUDE_PLUGIN_ROOT}/hooks/probe.py\" SessionEnd claude"}]}]
+  }
+}
