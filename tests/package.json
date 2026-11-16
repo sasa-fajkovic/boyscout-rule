@@ -1,0 +1,17 @@
+{
+  "name": "boyscout-rule-dev",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test opencode/*.test.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@opencode/plugin": "2.2.5",
+    "@types/node": "22.19.0",
+    "typescript": "5.9.3"
+  }
+}

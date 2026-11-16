@@ -9,6 +9,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SECRET = re.compile(r"(ghp_[A-Za-z0-9]{20,}|github_pat_|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY)")
 PERSONAL = re.compile(r"/Users/[a-z]|/home/(?!user\b)[a-z]+/|claude-501")
 STDLIB = {"bisect", "fcntl", "hashlib", "json", "os", "re", "shlex", "sys", "time"}
+LOCKFILES = ("package-lock.json", "npm-shrinkwrap.json", "yarn.lock", "pnpm-lock.yaml", "bun.lock", "bun.lockb")
 failures = []
 
 
@@ -115,6 +116,9 @@ def main():
     with open(os.path.join(ROOT, ".claude-plugin", "plugin.json")) as handle:
         check("OpenCode package version matches", package["version"] == json.load(handle)["version"])
     check("OpenCode has no runtime dependencies", not package.get("dependencies"))
+    # Claude Code runs an npm install inside the installed plugin when its root has package.json and a lockfile.
+    found = [name for name in LOCKFILES if os.path.exists(os.path.join(ROOT, name))]
+    check("plugin root has no npm lockfile", not found, ", ".join(found))
     return 1 if failures else 0
 
 

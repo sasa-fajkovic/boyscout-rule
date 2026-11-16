@@ -9,7 +9,7 @@ import unittest
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SCRIPT = os.path.join(ROOT, ".github", "scripts", "release.py")
 PYTHON = os.environ.get("BOYSCOUT_TEST_PYTHON", sys.executable)
-MANIFESTS = (".claude-plugin/plugin.json", ".codex-plugin/plugin.json", "package.json", "package-lock.json")
+MANIFESTS = (".claude-plugin/plugin.json", ".codex-plugin/plugin.json", "package.json")
 FAKE_GH = """#!/bin/sh
 dir="@DIR@"
 case "$1 $2" in
@@ -45,8 +45,6 @@ class ReleaseTest(unittest.TestCase):
         for path in MANIFESTS:
             os.makedirs(os.path.dirname(os.path.join(self.repo, path)), exist_ok=True)
             data = {"name": "boyscout-rule", "version": "0.3.6"}
-            if path == "package-lock.json":
-                data["packages"] = {"": {"version": "0.3.6"}, "node_modules/dependency": {"version": "9.1.2"}}
             with open(os.path.join(self.repo, path), "w") as handle:
                 json.dump(data, handle)
         self.git("add", "-A")
@@ -104,9 +102,6 @@ class ReleaseTest(unittest.TestCase):
         self.assertEqual(self.git("tag", cwd=self.origin), "v0.3.6")
         with open(os.path.join(self.gh, "dispatch")) as handle:
             self.assertIn("release/v" + version, handle.read())
-        lock = json.loads(self.git("show", "release/v%s:package-lock.json" % version))
-        self.assertEqual(lock["packages"][""]["version"], version)
-        self.assertEqual(lock["packages"]["node_modules/dependency"]["version"], "9.1.2")
 
     def test_minor_label_and_tested_release_merge(self):
         self.merge(18, ["minor"], "Rewrite")

@@ -6,7 +6,10 @@
     "module": "NodeNext",
     "target": "ES2023",
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@opencode/plugin": ["./node_modules/@opencode/plugin/dist/promise/index.d.ts"]
+    }
   },
-  "include": ["opencode/*.js"]
+  "include": ["../opencode/*.js"]
 }
