@@ -10,19 +10,20 @@
 | `.claude-plugin/`, `.codex-plugin/` | Plugin and marketplace manifests |
 | `opencode/`, `package.json` | OpenCode 2 adapter and distributable; no runtime npm dependencies |
 | `tests/` | Static checks, unit tests, harness tests and fixtures |
+| `tests/package.json`, `tests/package-lock.json` | JavaScript development dependencies. They stay out of the repository root because Claude Code runs an npm install inside an installed plugin whose root has both `package.json` and a lockfile |
 | `.github/workflows/`, `.github/scripts/` | CI, releases and branch protection |
 
 ## Tests
 
 ```sh
 python3 -m pip install -r tests/requirements.txt
-npm ci --ignore-scripts
+npm ci --ignore-scripts --prefix tests
 python3 tests/static_checks.py
 /usr/bin/python3 tests/static_checks.py
 python3 -m unittest discover -s tests/unit
 BOYSCOUT_TEST_PYTHON=/usr/bin/python3 /usr/bin/python3 -m unittest discover -s tests/unit
-npm run typecheck
-npm test
+npm run typecheck --prefix tests
+npm test --prefix tests
 python3 tests/package_check.py
 python3 tests/ci_checks.py
 actionlint
@@ -63,7 +64,7 @@ Keep changes small. Describe behavior, what you tested and what remains untested
 
 ## Releases
 
-After CI passes on `main`, the release workflow opens a `release/vX.Y.Z` PR updating both plugin manifests, `package.json` and the root versions in `package-lock.json`. It explicitly dispatches CI on that branch because pushes made with `GITHUB_TOKEN` do not trigger PR workflows. Merge that PR after every CI job passes; CI on the resulting `main` commit then tags that tested commit and publishes the GitHub Release. The release job never pushes a commit directly to `main`. Enable “Allow GitHub Actions to create and approve pull requests” in Actions settings so it can create release PRs. Installed plugins only update when their manifest version changes, so never edit versions by hand.
+After CI passes on `main`, the release workflow opens a `release/vX.Y.Z` PR updating both plugin manifests and `package.json`. It explicitly dispatches CI on that branch because pushes made with `GITHUB_TOKEN` do not trigger PR workflows. Merge that PR after every CI job passes; CI on the resulting `main` commit then tags that tested commit and publishes the GitHub Release. The release job never pushes a commit directly to `main`. Enable “Allow GitHub Actions to create and approve pull requests” in Actions settings so it can create release PRs. Installed plugins only update when their manifest version changes, so never edit versions by hand.
 | PR label | From `0.4.2` |
 |---|---|
 | `major` | `1.0.0` |

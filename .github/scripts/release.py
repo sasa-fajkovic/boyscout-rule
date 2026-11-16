@@ -8,7 +8,7 @@ import re
 import subprocess
 import sys
 
-MANIFESTS = (".claude-plugin/plugin.json", ".codex-plugin/plugin.json", "package.json", "package-lock.json")
+MANIFESTS = (".claude-plugin/plugin.json", ".codex-plugin/plugin.json", "package.json")
 LEVELS = ("patch", "minor", "major")
 TAG = re.compile(r"^v(\d+)\.(\d+)\.(\d+)$")
 BOT = {"GIT_%s_%s" % (role, field): value for role in ("AUTHOR", "COMMITTER")
@@ -72,8 +72,6 @@ def write_version(version):
         with open(path) as handle:
             data = json.load(handle)
         data["version"] = version
-        if path == "package-lock.json":
-            data["packages"][""]["version"] = version
         with open(path, "w") as handle:
             handle.write(json.dumps(data, indent=2) + "\n")
 
