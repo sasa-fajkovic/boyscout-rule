@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import os
 import shutil
@@ -14,6 +15,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 SCRIPT = os.path.join(ROOT, "hooks", "boyscout.py")
 FIXTURES = os.path.join(ROOT, "tests", "fixtures")
 PYTHON = os.environ.get("BOYSCOUT_TEST_PYTHON", sys.executable)
+WRONG = "Exit code 1\nerror: unknown command"
+MISSING_SCRIPT = 'Exit code 1\nnpm error Missing script: "tests"'
 
 
 def fixture(harness, name):
@@ -61,11 +64,13 @@ class HookTest(unittest.TestCase):
         value.update(changes)
         return value
 
-    def shell(self, command, ok=True, harness="claude", budget=5.0):
+    def shell(self, command, ok=True, harness="claude", budget=5.0, error=WRONG):
         if harness == "claude":
             name = "PostToolUse" if ok else "PostToolUseFailure"
             value = self.payload("claude", name)
             value["tool_input"] = {"command": command, "description": ""}
+            if not ok:
+                value["error"] = error
             return self.run_hook("claude", name, value, budget=budget)
         raise AssertionError("use codex_shell")
 
@@ -246,12 +251,12 @@ class FailureTest(HookTest):
         with open(transcript) as handle:
             items = [json.loads(line)["payload"]["item"] for line in handle]
         failed, passed = items[0], items[1]
-        def call(item, command):
-            value = self.payload("codex", "PostToolUse", transcript_path=transcript, tool_use_id=item["id"])
+        def call(item, command, output):
+            value = self.payload("codex", "PostToolUse", transcript_path=transcript, tool_use_id=item["id"], tool_response=output)
             value["tool_input"] = {"command": command}
             return self.run_hook("codex", "PostToolUse", value)
-        self.assertIsNone(call(failed, "make buidl"))
-        self.assertIn("make failed", self.context(call(passed, "make build")))
+        self.assertIsNone(call(failed, "make buidl", "make: *** No rule to make target 'buidl'.  Stop.\n"))
+        self.assertIn("make failed", self.context(call(passed, "make build", "built\n")))
 
     def test_codex_without_exit_code_judges_output(self):
         for path in (os.path.join(self.tmp, "missing.jsonl"), None):
@@ -268,8 +273,8 @@ class FailureTest(HookTest):
 
 class CorrectionTest(HookTest):
     def test_u7_triggers(self):
-        for text in ("no, use pnpm here", "I told you to use the Makefile", "again?", "that's wrong, the path is src/app",
-                     "`npm test` is wrong; use `pnpm test`.", "<file>README</file>\nNo, use pnpm.",
+        for text in ("I told you to use the Makefile", "again?", "that's wrong, the path is src/app",
+                     "`npm test` is wrong; use `pnpm test`.", "<file>README</file>\nI told you to use pnpm.",
                      "why did you run npm"):
             self.session = "s-" + str(abs(hash(text)))
             self.assertIsNotNone(self.prompt(text), text)
@@ -277,7 +282,8 @@ class CorrectionTest(HookTest):
     def test_u7_non_triggers(self):
         for text in ("no worries, continue", "do it again, thanks", "No problem", "Please add a test", "Could you try again?",
                      "```\nno such file\n```\nwhat does this mean", "> no, wrong\nquoted text above",
-                     "<agent-message from=\"x\">no, wrong</agent-message>", "/review no", "nothing to add"):
+                     "<agent-message from=\"x\">no, wrong</agent-message>", "/review no", "nothing to add",
+                     "no, use pnpm here", "Nope, the other one", "No. Use pnpm."):
             self.session = "s-" + str(abs(hash(text)))
             self.assertIsNone(self.prompt(text), text)
 
@@ -286,32 +292,110 @@ class CorrectionTest(HookTest):
         self.assertIsNone(self.run_hook("claude", "UserPromptSubmit", value))
 
     def test_u7_rate_limit(self):
-        self.assertIsNotNone(self.prompt("no, use pnpm"))
+        self.assertIsNotNone(self.prompt("I told you to use pnpm"))
         for text in ("ok", "that's wrong", "fine", "go on"):
             self.assertIsNone(self.prompt(text))
         self.assertIsNotNone(self.prompt("I told you already"))
 
     def test_u7_codex(self):
-        self.assertIsNotNone(self.prompt("no, use pnpm", harness="codex"))
+        self.assertIsNotNone(self.prompt("I told you to use pnpm", harness="codex"))
 
 
-class RepeatTest(HookTest):
-    def run_chain(self, chain):
-        outputs = [self.shell(c) for c in chain]
-        return [o for o in outputs if o]
+class RefusalTest(HookTest):
+    def refused(self, command, error):
+        value = self.payload("claude", "PostToolUseFailure", error=error)
+        value["tool_input"] = {"command": command}
+        return self.run_hook("claude", "PostToolUseFailure", value)
 
-    def test_u8_repeated_chain(self):
-        chain = ["npm run build -- --prod", "npm run package", "node scripts/release-notes.js pkg-a"]
-        self.assertEqual(self.run_chain(chain), [])
-        found = self.run_chain([c.replace("pkg-a", "pkg-b") for c in chain])
-        self.assertEqual(len(found), 1)
-        self.assertIn("same sequence of 3 commands", self.context(found[0]))
-        for _ in range(3):
-            self.assertEqual(self.run_chain(chain), [])
+    def test_refused_retry_after_wrong_form_does_not_nudge(self):
+        self.shell("npm run tests", ok=False, error=MISSING_SCRIPT)
+        self.assertIsNone(self.refused("npm test", "Permission to use Bash with command npm test has been denied."))
+        self.assertIn("npm failed", self.context(self.shell("npm test")))
 
-    def test_u8_no_repeat_for_ignored_or_single(self):
-        self.assertEqual(self.run_chain(["git status", "ls", "git diff"] * 3), [])
-        self.assertEqual(self.run_chain(["npm test"] * 8), [])
+    def test_refusal_never_starts_a_window(self):
+        self.assertIsNone(self.refused("npm run tests", 'Blocked by hook: npm error Missing script: "tests"'))
+        self.assertIsNone(self.shell("npm test"))
+
+    def test_refusals_do_not_use_up_the_window(self):
+        self.shell("npm run tests", ok=False, error=MISSING_SCRIPT)
+        for _ in range(6):
+            self.assertIsNone(self.refused("node build.js", "The user doesn't want to proceed with this tool use."))
+        self.assertIn("npm failed", self.context(self.shell("npm test")))
+
+    def test_exit_header_must_be_a_line_of_its_own(self):
+        self.shell("npm run tests", ok=False, error=MISSING_SCRIPT)
+        self.assertIsNone(self.refused("npm test", "Exit code 1 is not allowed by the sandbox policy"))
+        self.assertIn("npm failed", self.context(self.refused("npm test", "Exit code 1\r\n1 failing")))
+
+    def test_masked_shell_not_found_is_a_wrong_form(self):
+        value = self.payload("claude", "PostToolUse")
+        value["tool_input"] = {"command": "bin/check 2>&1 | tail -1"}
+        value["tool_response"] = {"stdout": "sh: 1: bin/check: not found", "stderr": ""}
+        self.assertIsNone(self.run_hook("claude", "PostToolUse", value))
+        self.assertIn("check failed", self.context(self.shell("bin/check --all ./src")))
+
+    def test_failures_recorded_by_the_previous_version(self):
+        self.shell("node scripts/check.js")
+        (path,) = self.state_files()
+        key = hashlib.sha256(b"npm").hexdigest()[:16]
+        for wrong, expected in ((False, False), (True, True)):
+            with open(path) as handle:
+                state = json.load(handle)
+            state["failures"] = {key: [{"hash": "0" * 16, "at": state["calls"], "wrong": wrong}]}
+            with open(path, "w") as handle:
+                json.dump(state, handle)
+            self.assertEqual(self.shell("npm test") is not None, expected, wrong)
+
+    def test_ordinary_failure_never_starts_a_window(self):
+        self.shell("npm test", ok=False, error="Exit code 1\n1 failing")
+        self.assertIsNone(self.shell("npm test test/math.js"))
+        self.shell("node -e 'process.exit(3)'", ok=False, error="Exit code 3")
+        self.assertIsNone(self.shell("node build.js"))
+
+    def test_missing_tool_is_not_a_wrong_form(self):
+        self.shell("pnpm test", ok=False, error="Exit code 127\nbash: pnpm: command not found")
+        self.assertIsNone(self.shell("pnpm run test"))
+        self.session += "-b"
+        self.shell("bin/check", ok=False, error="Exit code 127\nsh: 1: bin/check: not found")
+        self.assertIn("check failed", self.context(self.shell("bin/check --all ./src")))
+
+    def test_new_wrong_forms(self):
+        for command, error in (("python3 tools/gen.py", "python3: can't open file '/repo/tools/gen.py': [Errno 2] No such file"),
+                               ("python3 gen.py --fast", "gen.py: error: unrecognized arguments: --fast"),
+                               ("python3 gen.py bulid", "gen.py: error: argument cmd: invalid choice: 'bulid'"),
+                               ("python3 gen.py lint", "error: unknown subcommand 'lint'")):
+            self.session = "s-" + str(abs(hash(error)))
+            self.shell(command, ok=False, error="Exit code 2\n" + error)
+            self.assertIn("python3 failed", self.context(self.shell("python3 scripts/gen.py build")), error)
+
+
+class LexerTest(HookTest):
+    def test_backslash_continuation_is_one_command(self):
+        self.shell("make \\\n  buidl", ok=False, error="Exit code 2\nmake: *** No rule to make target 'buidl'.  Stop.")
+        self.assertIn("make failed", self.context(self.shell("make build")))
+
+    def test_continuation_flag_line_is_not_a_program(self):
+        self.shell("npm run tests\n  --verbose", ok=False, error=MISSING_SCRIPT)
+        self.assertIn("npm failed", self.context(self.shell("npm test")))
+
+    def test_shell_loops_are_skipped(self):
+        self.shell("npm run tests", ok=False, error=MISSING_SCRIPT)
+        for loop in ("for f in a b; do node $f; done", "while read l; do make $l; done < list", "if [ -f x ]; then node x; fi",
+                     "for f in a b\ndo\n  echo $f\ndone", "{ node a; node b; }", "case $x in a) node a;; esac"):
+            self.assertIsNone(self.shell(loop), loop)
+        self.assertIn("npm failed", self.context(self.shell("npm test")))
+
+    def test_continuation_inside_single_quotes_is_kept(self):
+        self.shell("make 'bu\\\nidl'", ok=False, error="Exit code 2\nmake: *** No rule to make target 'bu\\'.  Stop.")
+        self.assertIn("make failed", self.context(self.shell("make buidl")))
+
+    def test_continuation_after_escaped_backslashes(self):
+        self.shell("make bu\\\\\\\nidl", ok=False, error="Exit code 2\nmake: *** No rule to make target 'bu\\idl'.  Stop.")
+        self.assertIn("make failed", self.context(self.shell("make build")))
+
+    def test_keyword_named_script_is_a_program(self):
+        self.shell("./done --frobnicate", ok=False, error="Exit code 2\nerror: unrecognized arguments: --frobnicate")
+        self.assertIn("done failed", self.context(self.shell("./done build")))
 
 
 class ReviewFindingsTest(HookTest):
@@ -342,30 +426,11 @@ class ReviewFindingsTest(HookTest):
             self.shell("timeout %s %s 5 npm run tests" % (flag, value), ok=False)
             self.assertIn("npm failed", self.context(self.shell("npm test")))
 
-    def test_interpreter_scripts_are_distinct_steps(self):
-        chain = ["python scripts/build.py", "python scripts/package.py", "python scripts/check.py"]
-        outputs = [self.shell(c) for c in chain * 2]
-        self.assertEqual(len([o for o in outputs if o]), 1)
-
-    def test_compound_command_steps_count(self):
-        self.assertIsNone(self.shell("make a && make b && node build.js"))
-        self.assertIsNotNone(self.shell("make a && make b && node build.js"))
-
-    def test_one_event_spends_one_nudge(self):
-        for c in ("make one", "make two", "node x.js"):
-            self.shell(c)
-        self.shell("make one")
-        self.shell("make two")
-        self.shell("node y.js", ok=False)
-        out = self.shell("node x.js")
-        self.assertIsNotNone(out)
-        with open(self.state_files()[0]) as handle:
-            self.assertEqual(json.load(handle)["nudges"], 1)
-
-    def test_masked_test_failure_counts_as_failure(self):
+    def test_masked_wrong_form_counts_as_failure(self):
         value = self.payload("claude", "PostToolUse")
-        value["tool_input"] = {"command": "pytest -q | tail -20"}
-        value["tool_response"] = {"stdout": "1 failed, 2 passed in 0.1s", "stderr": ""}
+        value["tool_input"] = {"command": "pytest -q --frobnicate | tail -20"}
+        value["tool_response"] = {"stdout": "ERROR: usage: pytest [options]\npytest: error: unrecognized arguments: --frobnicate",
+                                  "stderr": ""}
         self.run_hook("claude", "PostToolUse", value)
         self.assertIsNotNone(self.shell("pytest -q tests/test_x.py"))
 
@@ -392,17 +457,25 @@ class ReviewFindingsTest(HookTest):
 
     def test_large_codex_record(self):
         transcript = os.path.join(self.tmp, "big.jsonl")
-        item = {"type": "CommandExecution", "id": "exec-big", "exit_code": 1, "aggregated_output": "x" * 400000}
+        item = {"type": "CommandExecution", "id": "exec-big", "exit_code": 0, "aggregated_output": "x" * 400000}
         with open(transcript, "w") as handle:
             handle.write(json.dumps({"type": "event_msg", "payload": {"type": "item_completed", "item": item}}) + "\n")
             ok = dict(item, id="exec-ok", exit_code=0, aggregated_output="ok")
             handle.write(json.dumps({"type": "event_msg", "payload": {"type": "item_completed", "item": ok}}) + "\n")
-        def call(call_id, command):
-            value = self.payload("codex", "PostToolUse", transcript_path=transcript, tool_use_id=call_id)
+        def call(call_id, command, output):
+            value = self.payload("codex", "PostToolUse", transcript_path=transcript, tool_use_id=call_id, tool_response=output)
             value["tool_input"] = {"command": command}
             return self.run_hook("codex", "PostToolUse", value)
-        self.assertFast(lambda: self.assertIsNone(call("exec-big", "make buidl")))
-        self.assertIsNotNone(call("exec-ok", "make build"))
+        self.assertFast(lambda: self.assertIsNone(call("exec-big", "make buidl", "make: *** No rule to make target 'buidl'.  Stop.\n")))
+        self.assertIsNone(call("exec-ok", "make build", "built\n"))
+
+    def test_line_start_patterns_stay_fast_on_blank_output(self):
+        def call(output):
+            value = self.payload("codex", "PostToolUse", transcript_path=None, tool_response=output)
+            value["tool_input"] = {"command": "npm test"}
+            self.run_hook("codex", "PostToolUse", value)
+        self.assertFast(lambda: call("\n" * 4000 + " \n" * 2000))
+        self.assertFast(lambda: call("cd " * 2600))
 
     def test_short_session_ids_do_not_collide(self):
         a = self.run_hook("claude", "SessionStart", self.payload("claude", "SessionStart", session_id="01a18863-aaaa"))
@@ -412,13 +485,13 @@ class ReviewFindingsTest(HookTest):
 
 class RoundTwoTest(HookTest):
     def test_heredoc_body_is_not_commands(self):
-        script = "python3 - <<'PY'\na = 1\nb = 2\nc = 3\nPY"
-        self.assertIsNone(self.shell(script))
-        self.assertIsNone(self.shell(script))
+        self.shell("node - <<'JS'\nrequire('./missing')\nmake('x')\nJS", ok=False,
+                   error="Exit code 1\nError: Cannot find module './missing'")
+        self.assertIn("node failed", self.context(self.shell("node build.js")))
 
     def test_or_branches_not_counted(self):
-        self.assertIsNone(self.shell("make a || make b || node build.js"))
-        self.assertIsNone(self.shell("make a || make b || node build.js"))
+        self.shell("make buidl || node build.js", ok=False, error="Exit code 2\nmake: *** No rule to make target 'buidl'.  Stop.")
+        self.assertIn("make failed", self.context(self.shell("make build")))
 
     def test_zero_failed_is_success(self):
         value = self.payload("claude", "PostToolUse")
@@ -430,9 +503,6 @@ class RoundTwoTest(HookTest):
     def test_more_wrappers_and_modules(self):
         self.shell("sudo --user root make deploy", ok=False)
         self.assertIn("make failed", self.context(self.shell("make release")))
-        chain = ["python -m build", "python -m twine check", "python3.12 -m pytest"]
-        outputs = [self.shell(c) for c in chain * 2]
-        self.assertEqual(len([o for o in outputs if o]), 1)
 
     def test_huge_command_is_skipped_fast(self):
         started = time.time()
@@ -442,7 +512,7 @@ class RoundTwoTest(HookTest):
     def test_h3_more_cases(self):
         self.assertIsNone(self.prompt("No, thanks."))
         self.session += "-b"
-        self.assertIsNotNone(self.prompt("<system-reminder>context</system-reminder>\nNo, use pnpm."))
+        self.assertIsNotNone(self.prompt("<system-reminder>context</system-reminder>\nI told you to use pnpm."))
 
 
 
@@ -467,7 +537,7 @@ class RoundThreeTest(HookTest):
 
         def call():
             self.session = "unclosed-%d" % next(tries)
-            self.assertIsNotNone(self.prompt("no, use pnpm\n" + "<div class=x>\n" * 30000))
+            self.assertIsNotNone(self.prompt("I told you to use pnpm\n" + "<div class=x>\n" * 30000))
         self.assertFast(call)
         self.session = "s-closed"
         self.assertIsNone(self.prompt("<a>x</a>" * 5000 + "<b>no, wrong</b>"))
@@ -477,9 +547,18 @@ class RoundThreeTest(HookTest):
         self.session = "s-ticket"
         self.assertIsNone(self.prompt("As I said in the ticket, please add tests"))
 
-    def test_context_respects_no_change_requests(self):
+    def test_context_grants_scoped_permission_and_respects_prohibitions(self):
         out = self.run_hook("claude", "SessionStart", self.payload("claude", "SessionStart"), env={"CLAUDE_CODE_DISABLE_AUTO_MEMORY": "1"})
-        self.assertIn("unless the user asked for no changes", self.context(out))
+        text = self.context(out)
+        for phrase in ("invoke the boyscout-rule skill before deciding how to handle it",
+                       "including during check or explain tasks", "never apply that fix in the user's checkout",
+                       "standing request to make qualifying fixes in a separate worktree",
+                       "push `boyscout/*` branches to this repo's origin and open draft PRs",
+                       'rules such as "push only when asked" or "only make changes I ask for" wait for',
+                       "no reason to skip", "Skip only for an explicit prohibition or approval requirement",
+                       '"ask before every push"', "whether or not it names boyscout",
+                       "report the finding and leave its files untouched"):
+            self.assertIn(phrase, text)
 
     def test_session_end_removes_lock(self):
         self.shell("npm run tests", ok=False)
@@ -520,24 +599,29 @@ class RoundFourTest(HookTest):
         for text in ("<a" * 49999, "<a " * 33000, "<div class=x\n" * 20000):
             def call():
                 self.session = "malformed-%d" % next(tries)
-                self.assertIsNotNone(self.prompt("no, use pnpm " + text))
+                self.assertIsNotNone(self.prompt("I told you, use pnpm " + text))
             self.assertFast(call)
 
 
 class RoundFiveTest(HookTest):
     def test_directions_count_only_after_the_first_prompt(self):
-        for text in ("We use pnpm in this repo.", "Don't run the full test suite, it is slow", "Don't use mocks for the db layer"):
+        for text in ("We don't use npm in this repo.", "We don\u2019t use npm here", "We no longer support Node 16.",
+                     "I never use mocks for the db layer", "The setup section is outdated"):
             self.session = "s-" + str(abs(hash(text)))
             self.assertIsNone(self.prompt(text), text)
             self.assertIsNotNone(self.prompt(text), text)
 
-    def test_no_only_at_the_start(self):
-        for text in ("No tests exist for foo yet, please add some.", "Please add tests.\nNo tests exist yet.", "No, thanks."):
+    def test_plain_instructions_are_not_directions(self):
+        for text in ("We use pnpm in this repo.", "Don't run the full test suite, it is slow", "Don't use mocks for the db layer"):
+            self.session = "s-" + str(abs(hash(text)))
+            self.prompt("Please add a test.")
+            self.assertIsNone(self.prompt(text), text)
+
+    def test_bare_no_is_not_a_correction(self):
+        for text in ("No tests exist for foo yet, please add some.", "Please add tests.\nNo tests exist yet.", "No, thanks.",
+                     "no", "Nope, wrong one", "No. Use pnpm."):
             self.session = "s-" + str(abs(hash(text)))
             self.assertIsNone(self.prompt(text), text)
-        for text in ("no", "Nope, wrong one", "No. Use pnpm."):
-            self.session = "s-" + str(abs(hash(text)))
-            self.assertIsNotNone(self.prompt(text), text)
 
     def test_interrupted_call_is_not_a_success(self):
         self.shell("npm run tests", ok=False)
@@ -574,7 +658,7 @@ class RoundFiveTest(HookTest):
         failure = self.payload("claude", "PostToolUseFailure")
         failure["tool_input"] = {"command": "npm run tests"}
         self.assertEqual(run("PostToolUseFailure", failure), "")
-        self.assertEqual(run("UserPromptSubmit", self.payload("claude", "UserPromptSubmit", prompt="no, use pnpm")), "")
+        self.assertEqual(run("UserPromptSubmit", self.payload("claude", "UserPromptSubmit", prompt="I told you to use pnpm")), "")
         self.assertEqual(run("SessionEnd", self.payload("claude", "SessionEnd")), "")
         self.assertEqual(self.state_files(), [])
 
@@ -597,8 +681,9 @@ class RoundSixTest(HookTest):
         self.assertIn("npm failed", self.context(self.shell("npm test")))
 
     def test_cleanup_before_program_is_not_a_guard(self):
-        value = self.payload("claude", "PostToolUseFailure", error="Exit code 1\nplatform darwin -- pytest-8.1.1\n1 failed in 0.1s")
-        value["tool_input"] = {"command": "rm -rf .pytest_cache && pytest"}
+        value = self.payload("claude", "PostToolUseFailure", error="Exit code 4\nERROR: usage: pytest [options]\n"
+                             "pytest: error: unrecognized arguments: --frobnicate")
+        value["tool_input"] = {"command": "rm -rf .pytest_cache && pytest --frobnicate"}
         self.assertIsNone(self.run_hook("claude", "PostToolUseFailure", value))
         self.assertIn("pytest failed", self.context(self.shell("pytest tests/")))
 
@@ -671,7 +756,7 @@ class LimitsTest(HookTest):
         for program in ("npm", "make", "cargo", "pytest", "go"):
             self.shell(program + " wrong", ok=False)
             nudges += 1 if self.shell(program + " right") else 0
-        nudges += 1 if self.prompt("no, use pnpm") else 0
+        nudges += 1 if self.prompt("I told you to use pnpm") else 0
         self.assertEqual(nudges, 3)
 
     def test_u10_end_and_stale(self):
@@ -730,7 +815,7 @@ class LimitsTest(HookTest):
         self.assertTrue(set(state["failures"]) <= set(after["failures"]))
 
     def test_u12_state_contents_and_mode(self):
-        self.prompt("no, the secret path is /srv/alice/private")
+        self.prompt("I told you, the secret path is /srv/alice/private")
         self.shell("npm run tests --token=abc123", ok=False)
         path = self.state_files()[0]
         with open(path) as handle:
@@ -762,19 +847,23 @@ class OpenCodeTest(HookTest):
         payload.update(changes)
         return self.run_hook("opencode", "PostToolUse", payload)
 
-    def test_explicit_status_is_authoritative_for_silent_failures(self):
+    def test_silent_failure_is_not_a_wrong_form(self):
         self.assertIsNone(self.oc_shell("shell-failure"))
+        self.assertIsNone(self.oc_shell("shell-success"))
+
+    def test_explicit_status_with_wrong_form_output(self):
+        self.assertIsNone(self.oc_shell("shell-wrong"))
         self.assertIn("node failed", self.context(self.oc_shell("shell-success")))
 
     def test_missing_boolean_and_interrupted_status_are_unknown(self):
         for changes in ({"exit_code": None}, {"exit_code": True}, {"exit_code": "0"}, {"interrupted": True}):
             self.session += "x"
-            self.oc_shell("shell-failure")
+            self.oc_shell("shell-wrong")
             self.assertIsNone(self.oc_shell("shell-success", **changes))
             self.assertIn("node failed", self.context(self.oc_shell("shell-success")))
 
     def test_prompt_admission_retries_keep_only_id_hash(self):
-        payload = {"session_id": self.session, "message_id": "private-message-id", "prompt": "no, private correction"}
+        payload = {"session_id": self.session, "message_id": "private-message-id", "prompt": "I told you, private correction"}
         self.assertIn("corrected you", self.context(self.run_hook("opencode", "UserPromptSubmit", payload)))
         self.assertIsNone(self.run_hook("opencode", "UserPromptSubmit", payload))
         with open(self.state_files()[0]) as handle:
@@ -785,7 +874,7 @@ class OpenCodeTest(HookTest):
         self.assertIn("corrected you", self.context(output))
 
     def test_replayed_tool_call_does_not_replace_failed_command(self):
-        self.oc_shell("shell-failure", call_id="tool-1")
+        self.oc_shell("shell-wrong", call_id="tool-1")
         self.assertIsNone(self.oc_shell("shell-success", call_id="tool-1"))
         self.assertIn("node failed", self.context(self.oc_shell("shell-success", call_id="tool-2")))
 

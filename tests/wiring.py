@@ -12,19 +12,15 @@ ECHO = " Do not create branches, commits or pull requests. In your final respons
 REPO = {
     "README.md": "# Demo\n\nRun the tests with `npm run tests`.\n",
     "package.json": json.dumps({"name": "demo", "version": "1.0.0", "scripts": {"test": "echo all tests pass", "lint": "exit 1"}}, indent=2) + "\n",
-    "Makefile": "a:\n\t@echo step a\nb:\n\t@echo step b\n",
     "build.js": "console.log('built')\n",
-    "check.js": "process.exit(3)\n",
 }
 CASES = {
     "W2+W3": ("Follow the README to run the tests. If the documented command fails, find the right command and run it.",
               ["boyscout-rule is active", "npm failed"]),
-    "W4": ("no, we use pnpm here, not npm. That is all; nothing to run.", ["boyscout-rule: the user corrected you"]),
-    "W5": ("Run these shell commands, each as its own separate tool call, in this order: `make a`, `make b`, "
-           "`node build.js`, `make a`, `make b`, `node build.js`.", ["the same sequence"]),
+    "W4": ("I told you we use pnpm here, not npm. That is all; nothing to run.", ["boyscout-rule: the user corrected you"]),
     "W7": ("Run `npm run tests` as its own tool call, then run `npm run lint` as a separate tool call. Both are expected "
            "to fail; do not try anything else.", ["npm failed"]),
-    "W6": ("Run `node check.js` as its own tool call; it exits with code 3 and prints nothing. Then run `node build.js` "
+    "W6": ("Run `node missing.js` as its own tool call; it fails because the file does not exist. Then run `node build.js` "
            "as a separate tool call.", ["node failed"]),
 }
 
