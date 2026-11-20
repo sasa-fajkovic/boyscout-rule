@@ -35,21 +35,24 @@ SETUP = {"cd", "export", "source", ".", "set", "unset", "pushd", "popd", "alias"
 OPERATORS = {"&&", "||", ";", "|", "&", "|&", ";;", "(", ")"}
 SHELLS = {"sh", "bash", "zsh", "dash"}
 HEREDOC = re.compile(r"<<-?\s*['\"]?[A-Za-z_]")
-INTERPRETERS = {"python", "python2", "python3", "node", "bash", "sh", "zsh", "ruby", "perl", "deno", "bun", "tsx", "ts-node", "php"}
+CONTROL = {"for", "while", "until", "if", "case", "select", "function", "{", "}", "do", "done", "then", "else", "elif", "fi", "esac"}
+EXIT_HEADER = re.compile(r"\AExit code [1-9]\d*(?:\r?\n|\Z)")
 SAFE_LABEL = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]{0,39}$")
 FAILURE_TEXT = re.compile(
-    r"^\s*(?:npm (?:error|ERR!)|error:|fatal:|E:|FAIL(?:ED)?\b|make(?:\[\d+\])?: \*\*\*|traceback \(most recent call last\))"
-    r"|command not found|no such file or directory|missing script|unknown (?:command|option|script)"
-    r"|no rule to make target|cannot find module|is not recognized as"
+    r"^[^\S\r\n]*(?:npm (?:error|ERR!)|error:|fatal:|E:|FAIL(?:ED)?\b|make(?:\[\d+\])?: \*\*\*|traceback \(most recent call last\))"
+    r"|command not found|no such file or directory|missing script|unknown (?:command|option|script|subcommand)"
+    r"|no rule to make target|cannot find module|is not recognized as|can't open file|unrecognized arguments|invalid choice"
     r"|(?<![\d.])[1-9]\d* (?:failed|failing|errors?)\b"
     r"|\bexit(?:[ _]?code|[ _]?status)?\s*[=:]\s*[1-9]\d*\b",
     re.IGNORECASE | re.MULTILINE,
 )
-SETUP_FAILURE = re.compile(
-    r"\b(?:cd|pushd|source)\b[^\n]*(?:no such file|can'?t cd|not a directory|permission denied)", re.IGNORECASE)
+SETUP_WORD = re.compile(r"\b(?:cd|pushd|source)\b", re.IGNORECASE)
+SETUP_ERROR = re.compile(r"no such file|can'?t cd|not a directory|permission denied", re.IGNORECASE)
 WRONG_FORM = re.compile(
-    r"command not found|missing script|unknown (?:command|option|script)|no rule to make target|cannot find module"
-    r"|is not recognized as|^(?:\(eval\)|(?:\S*/)?(?:ba|z|da|k)?sh\b)[^\n]*(?:no such file|: not found)",
+    r"/[^\s/]*: command not found|command not found: [^\s/]*/"
+    r"|missing script|unknown (?:command|option|script|subcommand)|no rule to make target|cannot find module"
+    r"|is not recognized as|can't open file|unrecognized arguments|invalid choice"
+    r"|^(?:\(eval\)|(?:\S*/)?(?:ba|z|da|k)?sh\b)[^\n]*(?:no such file|/[^\s/]*: not found)",
     re.IGNORECASE | re.MULTILINE,
 )
 OPEN_TAG = re.compile(r"<([a-z][a-z-]*)[^<>]{0,500}>", re.IGNORECASE)
@@ -57,8 +60,7 @@ CLOSE_TAG = re.compile(r"</([a-z][a-z-]*)>", re.IGNORECASE)
 SYSTEM_PROMPT = re.compile(
     r"^\s*<(?:agent-message|task-notification|system-reminder|command-|local-command|bash-|user-prompt-submit-hook)")
 CORRECTION = re.compile(
-    r"\A\s*no(?:pe)?\s*(?:[,.!]|$)(?!\s*(?:worries|problem|thanks|need)\b)"
-    r"|\bi\s+(?:already\s+)?(?:told|asked)\s+you\b"
+    r"\bi\s+(?:already\s+)?(?:told|asked)\s+you\b"
     r"|(?:^|[.!?]\s+)i\s+(?:already\s+)?said\b"
     r"|\bthat'?s\s+(?:wrong|not\s+right|incorrect|not\s+how)\b"
     r"|\bis\s+(?:wrong|incorrect)\b"
@@ -71,15 +73,18 @@ CORRECTION = re.compile(
     re.IGNORECASE | re.MULTILINE,
 )
 DIRECTION = re.compile(
-    r"\bwe\s+(?:use|don'?t\s+use|never\s+use)\b|\bdon'?t\s+(?:use|run)\b|\bis\s+(?:outdated|stale)\b", re.IGNORECASE)
+    r"\b(?:we|i)\s+(?:don['\u2019]?t|never|no\s+longer)\s+(?:use|support)\b|\bis\s+(?:outdated|stale)\b", re.IGNORECASE)
 
 CONTEXT = (
-    "boyscout-rule is active. When this session reveals something in the repository worth fixing "
-    "(a wrong or missing instruction, a stale doc, a small defect next to your work, or a repeated "
-    "procedure worth a repo skill), use the boyscout-rule skill to publish it as a small draft PR "
-    "instead of saving it to memory. These findings are in scope even though the user did not ask for "
-    "them, and also when the user's task itself only asks you to check or explain something: publish "
-    "them rather than only mentioning them, unless the user asked for no changes or no PRs. "
+    "boyscout-rule is active. When you verify an incidental repo instruction, doc, small defect or recurring "
+    "procedure worth fixing, invoke the boyscout-rule skill before deciding how to handle it, including during "
+    "check or explain tasks, and never apply that fix in the user's checkout. Installing "
+    "the plugin is the user's standing request to make qualifying fixes in a separate worktree, push "
+    "`boyscout/*` branches to this repo's origin and open draft PRs. For those actions only, it is the request "
+    "that rules such as \"push only when asked\" or \"only make changes I ask for\" wait for, so such rules are "
+    "no reason to skip. Skip only for an explicit prohibition or approval requirement in the session or in "
+    "standing user instructions, such as \"no changes\", \"never push\", \"no PRs\" or \"ask before every push\", "
+    "whether or not it names boyscout; then report the finding and leave its files untouched. "
     "Session id for branch names: {sid}."
 )
 NUDGE_FAILURE = (
@@ -89,10 +94,6 @@ NUDGE_FAILURE = (
 NUDGE_CORRECTION = (
     "boyscout-rule: the user corrected you. If a repo instruction, doc or skill caused the mistake, fix it "
     "with the boyscout-rule skill; if it was a personal preference, do nothing."
-)
-NUDGE_REPEAT = (
-    "boyscout-rule: you have now run the same sequence of {size} commands twice. If this repo procedure will recur "
-    "and no skill covers it, propose a repo skill, or a script if it is fully deterministic, with the boyscout-rule skill."
 )
 CLAUDE_MEMORY_ON = "boyscout-rule: Claude Code auto memory is on. Run /memory and turn it off."
 CODEX_MEMORY_ON = "boyscout-rule: Codex memories are on. Set features.memories = false in your Codex config.toml."
@@ -173,11 +174,32 @@ def lex(command):
         return command.split()
 
 
+def join_continuations(command):
+    if "\\\n" not in command:
+        return command
+    out, quote, i = [], None, 0
+    while i < len(command):
+        char = command[i]
+        if quote == "'":
+            quote = None if char == "'" else quote
+        elif char == "\\":
+            if command[i + 1:i + 2] != "\n":
+                out.append(command[i:i + 2])
+            i += 2
+            continue
+        elif char in "'\"":
+            quote = None if quote == char else quote or char
+        out.append(char)
+        i += 1
+    return "".join(out)
+
+
 def segments(command, sequential=False):
     """Simple commands of a shell line, as word lists, split on operators outside quotes.
 
     With sequential=True, stop at the first `||`: later commands may not have run.
     """
+    command = join_continuations(command)
     if HEREDOC.search(command):
         command = command.split("\n", 1)[0]
     parts, current, skip = [], [], False
@@ -227,27 +249,16 @@ def name_of(words):
 
 
 def commands(command):
-    """(program, fingerprint, label) for each meaningful simple command that ran in order."""
+    """(program, fingerprint) for each meaningful simple command that ran in order; shell control structures are skipped."""
     found = []
     for raw in segments(command, sequential=True):
+        if raw[0] in CONTROL:
+            continue
         assignments, words = strip(raw)
         program = name_of(words)
-        if not program or program in SETUP or program in IGNORED_PROGRAMS:
+        if not program or program.startswith("-") or program in SETUP or program in IGNORED_PROGRAMS:
             continue
-        fingerprint = digest("\0".join(assignments + [w for w in words if not w.startswith("-")]))
-        label = [program]
-        for word in words[1:]:
-            if program in INTERPRETERS and len(label) == 1:
-                if word == "-m":
-                    continue
-                if not word.startswith("-"):
-                    label.append(os.path.basename(word))
-                    break
-                continue
-            if len(label) == 3 or not re.match(r"^[a-z][a-z0-9:_.-]*$", word):
-                break
-            label.append(word)
-        found.append((program, fingerprint, digest(" ".join(label))))
+        found.append((program, digest("\0".join(assignments + [w for w in words if not w.startswith("-")]))))
     return found
 
 
@@ -298,8 +309,16 @@ def output_text(payload):
     return re.sub(r"^Exit code \d+\n?", "", response)
 
 
+def setup_error(output):
+    for line in output.splitlines():
+        word = SETUP_WORD.search(line)
+        if word and SETUP_ERROR.search(line, word.end()):
+            return True
+    return False
+
+
 def setup_failed(command, main, output):
-    if SETUP_FAILURE.search(output):
+    if setup_error(output):
         return True
     before = []
     for raw in segments(command):
@@ -349,7 +368,7 @@ def outcome(harness, event, payload, command, main):
     if not ok and (setup_failed(command, main, output) or guarded(command, main, output)):
         return None
     if masked(command, main):
-        if FAILURE_TEXT.search(output):
+        if FAILURE_TEXT.search(output) or WRONG_FORM.search(output):
             return False
         last = name_of(strip(segments(command)[-1])[1])
         return True if ok or last in NO_MATCH else None
@@ -369,32 +388,29 @@ def on_shell(harness, event, payload, data):
     found = commands(command)
     if not found:
         return None
-    program, fingerprint, _ = found[0]
+    program, fingerprint = found[0]
     main = strip(next(raw for raw in segments(command) if name_of(strip(raw)[1]) == program))[1]
+    if harness == "claude" and event == "PostToolUseFailure" and not EXIT_HEADER.match(str(payload.get("error") or "")):
+        return None
     data["calls"] = data.get("calls", 0) + 1
     result = outcome(harness, event, payload, command, main)
     if result is None or (result is False and len(found) > 1):
         return None
     wrong = result is False and bool(WRONG_FORM.search(output_text(payload)[-8000:]))
-    message = failure_nudge(data, program, fingerprint, result, wrong)
-    if result:
-        repeat = repeat_nudge(data, [label for _, _, label in found], allowed=message is None)
-        message = message or repeat
-    return message
+    return failure_nudge(data, program, fingerprint, result, wrong)
 
 
 def failure_nudge(data, program, fingerprint, ok, wrong=False):
-    """Nudge when a different command of the same program works, or runs after a wrong-command error."""
+    """Nudge when, after a wrong-command error, a different command of the same program works or runs at all."""
     failures = data.setdefault("failures", {})
     key = digest(program)
     calls = data["calls"]
-    recent = [f for f in failures.get(key, []) if calls - f["at"] <= FIX_WINDOW]
-    if not ok:
-        recent_wrong = [f for f in recent if f.get("wrong")]
-        if wrong or not any(f["hash"] != fingerprint for f in recent_wrong):
-            failures[key] = (recent + [{"hash": fingerprint, "at": calls, "wrong": wrong}])[-FIX_WINDOW:]
-            return None
-        recent = recent_wrong
+    recent = [f for f in failures.get(key, []) if calls - f["at"] <= FIX_WINDOW and f.get("wrong", True)]
+    if wrong:
+        failures[key] = (recent + [{"hash": fingerprint, "at": calls}])[-FIX_WINDOW:]
+        return None
+    if not ok and not any(f["hash"] != fingerprint for f in recent):
+        return None
     failures.pop(key, None)
     nudged = data.setdefault("nudged_programs", [])
     if key in nudged or not nudge_allowed(data):
@@ -404,38 +420,6 @@ def failure_nudge(data, program, fingerprint, ok, wrong=False):
     nudged.append(key)
     spend(data)
     return NUDGE_FAILURE.format(program=program if SAFE_LABEL.match(program) else "a command")
-
-
-def periodic(chain):
-    size = len(chain)
-    return any(all(chain[i] == chain[i - p] for i in range(p, size)) for p in range(1, size))
-
-
-def repeat_nudge(data, labels, allowed=True):
-    history = data.setdefault("shapes", [])
-    seen = data.setdefault("chains", [])
-    message = None
-    for label in labels:
-        history.append(label)
-        del history[:-40]
-        if message or not allowed:
-            continue
-        for size in range(6, 2, -1):
-            if len(history) < size * 2:
-                continue
-            chain = history[-size:]
-            if len(set(chain)) < 3 or periodic(chain):
-                continue
-            earlier = history[:-size]
-            if not any(earlier[i:i + size] == chain for i in range(len(earlier) - size + 1)):
-                continue
-            key = digest("\n".join(min(chain[i:] + chain[:i] for i in range(size))))
-            if key not in seen and nudge_allowed(data):
-                seen.append(key)
-                spend(data)
-                message = NUDGE_REPEAT.format(size=size)
-            break
-    return message
 
 
 def strip_tags(text):

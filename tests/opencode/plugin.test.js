@@ -89,36 +89,34 @@ test("registers the shared skill and injects context on resumed requests", async
   dispose = undefined;
 });
 
-test("captured v2 shell results trigger a nudge for silent failures", async () => {
+test("v2 shell results: silent failures stay quiet, wrong-form failures nudge", async () => {
   const h = await harness();
-  const failure = await h.shell("shell-failure");
+  await h.shell("shell-failure");
+  assert.doesNotMatch(text(await h.shell("shell-success")), /node failed/);
+  const failure = await h.shell("shell-wrong");
   assert.doesNotMatch(text(failure), /node failed/);
-  const success = await h.shell("shell-success");
+  const success = await h.shell("shell-success", "node build.js");
   assert.match(text(success), /node failed/);
   assert.equal(success.result.output.exit, 0);
   assert.equal(success.result.content[0].text, "42\n");
-  const again = await h.shell("shell-success");
-  assert.doesNotMatch(text(again), /node failed/);
+  await h.shell("shell-wrong");
+  assert.doesNotMatch(text(await h.shell("shell-success", "node build.js")), /node failed/);
 });
 
 test("corrections reach context once without changing the user prompt", async () => {
   const h = await harness();
-  await h.prompt(JSON.stringify("no, use pnpm"));
+  await h.prompt(JSON.stringify("I told you to use pnpm"));
   assert.match(await h.context(), /the user corrected you/);
   assert.doesNotMatch(await h.context(), /the user corrected you/);
   // Duplicate prompt admission must not advance counters or spend the budget.
-  await h.prompt(JSON.stringify("no, use pnpm"));
+  await h.prompt(JSON.stringify("I told you to use pnpm"));
   assert.doesNotMatch(await h.context(), /the user corrected you/);
 });
 
-test("command sequences and the shared three-nudge cap", async () => {
+test("the shared three-nudge cap", async () => {
   const h = await harness();
-  for (const cmd of ["make a", "make b", "node build.js", "make a", "make b"]) {
-    assert.doesNotMatch(text(await h.shell("shell-success", cmd)), /the same sequence/);
-  }
-  assert.match(text(await h.shell("shell-success", "node build.js")), /the same sequence/);
-  for (const program of ["npm", "cargo", "pytest"]) {
-    await h.shell("shell-failure", program + " wrong");
+  for (const program of ["npm", "cargo", "make", "pytest"]) {
+    await h.shell("shell-wrong", program + " wrong");
     const response = text(await h.shell("shell-success", program + " right"));
     if (program === "pytest") assert.doesNotMatch(response, /pytest failed/);
     else assert.match(response, /failed/);
@@ -127,7 +125,7 @@ test("command sequences and the shared three-nudge cap", async () => {
 
 test("no shared state between sessions and state contains no input", async () => {
   const h = await harness();
-  await h.shell("shell-failure", "npm private-token-123");
+  await h.shell("shell-wrong", "npm private-token-123");
   assert.doesNotMatch(text(await h.shell("shell-success", "npm right", "other")), /npm failed/);
   const folder = join(directory, "data", "sessions");
   for (const name of await readdir(folder)) {
@@ -143,7 +141,7 @@ test("skips children and fails open when session lookup fails", async () => {
   for (const options of [{ child: true }, { broken: true }, { broken: "hang" }]) {
     const h = await harness(options);
     assert.equal(await h.context(), "");
-    await h.prompt("no, stop");
+    await h.prompt("I told you to stop");
     assert.doesNotMatch(text(await h.shell("shell-success")), /boyscout-rule/);
     await dispose();
     dispose = undefined;
@@ -152,7 +150,7 @@ test("skips children and fails open when session lookup fails", async () => {
 
 test("errors, interrupted calls and missing exit status never imply success", async () => {
   const h = await harness();
-  await h.shell("shell-failure");
+  await h.shell("shell-wrong");
   const invokeHook = h.hooks.get("execute.after");
   const event = { tool: "shell", sessionID: "root", id: "error", input: { command: "node success.js" }, status: "error", error: { message: "interrupted" } };
   await invokeHook(event);

@@ -290,6 +290,18 @@ def keep_login(home):
         os.replace(path, os.path.join(USER_CODEX, "auth.json"))
 
 
+def standing_instructions(base, harness, text):
+    if harness == "claude":
+        path = os.path.join(base, "CLAUDE.md")
+    elif harness == "codex":
+        path = os.path.join(codex_home(base), "AGENTS.md")
+    else:
+        path = os.path.join(base, "config", "opencode", "AGENTS.md")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as handle:
+        handle.write(text)
+
+
 def codex_hooks(repo, env):
     """Install the actual marketplace/plugin in the test CODEX_HOME, then trust its shipped hooks by hash."""
     for args in (["codex", "plugin", "marketplace", "add", ROOT, "--json"],
