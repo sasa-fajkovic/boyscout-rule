@@ -62,7 +62,8 @@ def ensure_release(repo, tag):
     """Finish a run that pushed its tag but failed before the GitHub Release existed."""
     if subprocess.run(["gh", "release", "view", tag, "--repo", repo], capture_output=True).returncode == 0:
         return
-    previous = latest_tag(tag + "^")
+    parents = run("git", "rev-list", "--parents", "-n", "1", tag).split()[1:]
+    previous = latest_tag(parents[0]) if parents else None
     run("gh", "release", "create", tag, "--repo", repo, "--verify-tag", "--title", tag, "--notes", notes(merged_prs(repo, previous, tag)))
     print("published missing release " + tag)
 
