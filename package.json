@@ -1,6 +1,6 @@
 {
   "name": "boyscout-rule",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Publish verified repository improvements as small draft PRs.",
   "type": "module",
   "exports": "./opencode/index.js",

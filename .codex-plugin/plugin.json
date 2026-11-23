@@ -1,6 +1,6 @@
 {
   "name": "boyscout-rule",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "Leave the repository better than you found it: agents publish verified lessons, small fixes and repo skills as small draft PRs instead of saving them to memory.",
   "author": {
     "name": "Sasa Fajkovic"
