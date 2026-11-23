@@ -165,6 +165,13 @@ class ReleaseTest(unittest.TestCase):
         self.assertIn("published missing release v0.3.7", result.stdout)
         self.assertTrue(os.path.exists(os.path.join(self.gh, "releases", "v0.3.7")))
 
+    def test_missing_release_on_root_commit_recovered(self):
+        os.remove(os.path.join(self.gh, "releases", "v0.3.6"))
+        self.merge(19, ["minor"])
+        result = self.run_release()
+        self.assertIn("published missing release v0.3.6", result.stdout, result.stderr)
+        self.assertPrepared(result, "0.4.0")
+
     def test_rejected_push_publishes_nothing(self):
         self.merge(19)
         with open(os.path.join(self.origin, "hooks", "pre-receive"), "w") as handle:
